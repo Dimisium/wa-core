@@ -193,6 +193,9 @@ export async function marcarQR(raw) {
 
 export function marcarConectado(usuario) {
   const veniaCaido = estado.conexion !== 'conectado';
+  // Si veníamos de 'qr', alguien acaba de escanear y está esperando saber si
+  // funcionó. Hay que leerlo antes de sobrescribir el estado.
+  const acabanDeEscanear = estado.conexion === 'qr';
   estado.conexion = 'conectado';
   estado.motivo = '';
   estado.qrDataUrl = null;
@@ -201,9 +204,13 @@ export function marcarConectado(usuario) {
   estado.conectadoDesde = Date.now();
   estado.desconectadoDesde = null;
   estado.vinculado = true;
-  if (veniaCaido) apuntar('✅', `Conectado${estado.telefono ? ` como +${estado.telefono}` : ''}`);
+  if (acabanDeEscanear) {
+    apuntar('🔗', `Vinculado${estado.telefono ? ` con +${estado.telefono}` : ''}`);
+  } else if (veniaCaido) {
+    apuntar('✅', `Conectado${estado.telefono ? ` como +${estado.telefono}` : ''}`);
+  }
   emitir();
-  avisarReconexion();
+  avisarReconexion({ acabanDeEscanear });
 }
 
 export function marcarDesconectado({ motivo = '', reintentando = true } = {}) {
@@ -330,16 +337,26 @@ async function alertarAhora(tipo) {
   await avisar('caida', textos.caida({ minutos: minutosCaido(), motivo: estado.motivo }));
 }
 
-async function avisarReconexion() {
-  if (!alertaEnviada) return;
-  const veniaDeQR = tipoAlerta === 'qr';
+/**
+ * Avisa que WhatsApp volvió.
+ *
+ * Un escaneo siempre se confirma, aunque nunca se haya mandado una alerta: hay
+ * una persona que acaba de apuntar el celular al código y lo único que quiere
+ * saber es si funcionó. Una reconexión sola, en cambio, solo se anuncia si antes
+ * se avisó de la caída — si nadie se enteró del problema, no hay nada que
+ * celebrar.
+ */
+async function avisarReconexion({ acabanDeEscanear = false } = {}) {
+  if (!alertaEnviada && !acabanDeEscanear) return;
+
+  const esVinculacion = acabanDeEscanear || tipoAlerta === 'qr';
   alertaEnviada = false;
   tipoAlerta = null;
   ultimaAlerta = 0;
   avisosQR = 0;
 
   const datos = { telefono: estado.telefono };
-  return veniaDeQR
+  return esVinculacion
     ? avisar('vinculado', textos.vinculado(datos))
     : avisar('reconectado', textos.reconectado(datos));
 }

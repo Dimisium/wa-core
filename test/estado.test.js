@@ -119,10 +119,28 @@ test('una caída que resulta ser pérdida de sesión se reavisa sin esperar', as
   assert.equal(avisos.at(-1).tipo, 'escanear', 'cambió lo que la persona tiene que hacer');
 });
 
+test('un escaneo siempre se confirma, aunque nunca se haya avisado nada', async () => {
+  const avisos = espia();
+  estado.marcarVinculado(false);
+  await estado.marcarQR('2@codigo,abc,def');
+
+  // Vincula de inmediato: el vigilante nunca alcanzó a quejarse
+  estado.marcarConectado({ id: '5218112345678:3@s.whatsapp.net' });
+  await pausa(50);
+
+  assert.equal(avisos.length, 1, 'quien acaba de escanear necesita saber si funcionó');
+  assert.equal(avisos[0].tipo, 'vinculado');
+  assert.ok(avisos[0].texto.includes('+5218112345678'));
+
+  const primera = estado.snapshot().bitacora[0];
+  assert.equal(primera.icono, '🔗');
+  assert.ok(primera.texto.includes('Vinculado'), `la bitácora dice: ${primera.texto}`);
+});
+
 test('al reconectar avisa que volvió, y solo si había avisado antes', async () => {
   const avisos = espia();
   estado.marcarConectado({ id: '5218112345678@s.whatsapp.net' });
-  assert.equal(avisos.length, 0, 'sin caída previa no hay nada que celebrar');
+  assert.equal(avisos.length, 0, 'sin caída previa ni escaneo no hay nada que celebrar');
 
   estado.marcarDesconectado({ motivo: 'se cayó', reintentando: false });
   await pausa(50);

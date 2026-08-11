@@ -1,6 +1,6 @@
 {
   "name": "wa-core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Capa de conexión a WhatsApp (Baileys) compartida por los bots: reconexión, QR en vivo, estado y avisos de caída. Es el único lugar que importa Baileys.",
   "type": "module",
   "main": "./src/index.js",
