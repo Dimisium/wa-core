@@ -38,6 +38,9 @@ import * as estado from './estado.js';
 
 let reconnectAttempts = 0;
 let reconnectTimer = null;
+// Vigía del arranque: si el socket no da señales (QR, abierto o cerrado), se recicla
+let vigiaTimer = null;
+const VIGIA_MS = 60000;
 // Mientras esté en true nadie reconecta solo: la sesión se desvinculó a mano
 let desvinculado = false;
 
@@ -97,8 +100,14 @@ function cancelarReconexion() {
   reconnectTimer = null;
 }
 
+function cancelarVigia() {
+  if (vigiaTimer) clearTimeout(vigiaTimer);
+  vigiaTimer = null;
+}
+
 /** Cierra el socket vivo sin que dispare reconexiones. */
 function soltarSocket() {
+  cancelarVigia();
   const anterior = getSock();
   if (!anterior) return;
   try {
@@ -136,8 +145,21 @@ export async function startWhatsApp() {
   setSock(sock);
   sock.ev.on('creds.update', saveCreds);
 
+  // A veces el socket nuevo no emite nada: ni QR, ni abre, ni cierra. Sin esto el
+  // panel se queda en "Conectando…" para siempre y nadie reintenta.
+  vigiaTimer = setTimeout(() => {
+    vigiaTimer = null;
+    if (sock !== getSock()) return;
+    console.log(`⏱️  WhatsApp sin respuesta tras ${VIGIA_MS / 1000}s — reciclando la conexión`);
+    soltarSocket();
+    estado.marcarDesconectado({ motivo: 'La conexión no respondió', reintentando: true });
+    programarReconexion({ rapido: true });
+  }, VIGIA_MS);
+  vigiaTimer.unref?.();
+
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
+    if (sock === getSock() && (qr || connection === 'open' || connection === 'close')) cancelarVigia();
 
     if (qr) {
       if (opciones.qrEnConsola) {
