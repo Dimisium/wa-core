@@ -249,7 +249,12 @@ export async function startWhatsApp() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function borrarCredenciales() {
-  await fs.rm(opciones.authDir, { recursive: true, force: true });
+  // Se vacía en vez de borrarla: la carpeta suele ser un volumen montado y el
+  // punto de montaje no se puede eliminar
+  const archivos = await fs.readdir(opciones.authDir).catch(() => []);
+  await Promise.all(
+    archivos.map((f) => fs.rm(path.join(opciones.authDir, f), { recursive: true, force: true }))
+  );
   estado.marcarVinculado(false);
 }
 
